@@ -11,10 +11,10 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from sentinel.workflow.graph import build_sentinel_graph
 from sentinel.observability.tracer import get_langfuse_callback_handler
 
-app = typer.Typer(help="SentinelAI: Autonomous Multi-Agent Code Audit & Self-Healing Engine")
+app = typer.Typer(help="SentinelAI: Autonomous Multi-Agent Code Audit & Self-Healing Engine", no_args_is_help=True)
 console = Console()
 
-@app.command()
+@app.command(name="audit")
 def audit(
     target_path: str = typer.Argument(..., help="Path to code file or directory to audit"),
     max_iterations: int = typer.Option(3, "--max-iterations", "-m", help="Maximum self-healing retry iterations")
@@ -130,6 +130,11 @@ def audit(
         report_output_path = Path("SENTINEL_AUDIT_REPORT.md")
         report_output_path.write_text(report_text, encoding="utf-8")
         console.print(f"\n[bold green]✓ Report generated successfully:[/bold green] {report_output_path.resolve()}")
+
+@app.command(name="version")
+def version():
+    """Prints SentinelAI version."""
+    console.print("[cyan]SentinelAI version 0.1.0 (Production Multi-Agent Engine)[/cyan]")
 
 if __name__ == "__main__":
     app()
