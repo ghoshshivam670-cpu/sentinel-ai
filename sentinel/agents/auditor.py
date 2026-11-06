@@ -12,10 +12,9 @@ Look for:
 3. Logical Bugs: Incorrect calculations, broken state transitions, inverted booleans.
 
 CRITICAL INSTRUCTIONS:
-- You MUST populate the `vulnerabilities` array in the AuditReport with each identified vulnerability.
-- Do NOT leave `vulnerabilities` empty if you found issues.
-- For each vulnerability, populate id (e.g., 'VULN-001', 'VULN-002'), severity ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL'), category, file_path, line_number, description, and recommendation.
-- Set risk_score between 0.0 and 10.0.
+- You MUST populate the `vulnerabilities` list with an entry for EVERY issue you find (such as SQL Injection, MD5 hashing, etc.).
+- NEVER return an empty `vulnerabilities` list if the codebase contains security flaws.
+- Every entry in `vulnerabilities` must include: id ('VULN-001', 'VULN-002'), severity, category, file_path, line_number, description, and recommendation.
 """
 
 def auditor_node(state: AgentState) -> dict:

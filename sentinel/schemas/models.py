@@ -19,9 +19,11 @@ class AuditPlan(BaseModel):
     steps: List[str] = Field(description="Ordered list of analysis and testing steps")
 
 class AuditReport(BaseModel):
-    summary: str
+    summary: str = Field(description="Brief high-level overview of the security posture")
     risk_score: float = Field(ge=0.0, le=10.0, description="Overall risk rating from 0.0 (clean) to 10.0 (critical danger)")
-    vulnerabilities: List[Vulnerability] = Field(default_factory=list)
+    vulnerabilities: List[Vulnerability] = Field(
+        description="List of ALL discovered security, reliability, and logic vulnerabilities. If issues exist, they MUST be listed here."
+    )
     has_critical_findings: bool = False
 
 class TestGenerationResult(BaseModel):
