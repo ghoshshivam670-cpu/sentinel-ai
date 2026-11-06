@@ -24,6 +24,7 @@ sse-starlette>=2.1.0
 # CLI & Interactive Dev Experience
 rich>=13.7.1
 typer>=0.12.3
+streamlit>=1.35.0
 
 # Observability & LLMOps
 langfuse>=2.35.0
