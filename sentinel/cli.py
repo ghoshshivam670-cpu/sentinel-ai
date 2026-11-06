@@ -15,7 +15,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.syntax import Syntax
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from sentinel.workflow.graph import build_sentinel_graph
 from sentinel.observability.tracer import get_langfuse_callback_handler
@@ -84,20 +83,14 @@ def audit(
     config = {"callbacks": callbacks} if callbacks else {}
 
     # Stream agent state execution
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        transient=True,
-    ) as progress:
-        task = progress.add_task("[yellow]Executing multi-agent state graph...", total=None)
-        
-        final_state = None
-        for event in graph.stream(initial_state, config=config):
-            for node_name, state_update in event.items():
-                if "activity_log" in state_update and state_update["activity_log"]:
-                    latest_msg = state_update["activity_log"][-1]
-                    console.print(f"[dim]{node_name.upper()}:[/dim] {latest_msg}")
-            final_state = event
+    console.print("\n[yellow]Executing multi-agent state graph...[/yellow]")
+    final_state = None
+    for event in graph.stream(initial_state, config=config):
+        for node_name, state_update in event.items():
+            if "activity_log" in state_update and state_update["activity_log"]:
+                latest_msg = state_update["activity_log"][-1]
+                console.print(f"[bold cyan]▶ {node_name.upper()}:[/bold cyan] {latest_msg}")
+        final_state = event
 
     # Extract final consolidated state
     if not final_state:
