@@ -1,5 +1,14 @@
 import os
 import sys
+
+# Ensure UTF-8 output on Windows consoles
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from pathlib import Path
 import typer
 from rich.console import Console
@@ -70,7 +79,7 @@ def audit(
     langfuse_cb = get_langfuse_callback_handler()
     if langfuse_cb:
         callbacks.append(langfuse_cb)
-        console.print("[green]✓[/green] Langfuse observability connected.")
+        console.print("[green][OK][/green] Langfuse observability connected.")
 
     config = {"callbacks": callbacks} if callbacks else {}
 
@@ -129,7 +138,7 @@ def audit(
     if report_text:
         report_output_path = Path("SENTINEL_AUDIT_REPORT.md")
         report_output_path.write_text(report_text, encoding="utf-8")
-        console.print(f"\n[bold green]✓ Report generated successfully:[/bold green] {report_output_path.resolve()}")
+        console.print(f"\n[bold green][OK] Report generated successfully:[/bold green] {report_output_path.resolve()}")
 
 @app.command(name="version")
 def version():
