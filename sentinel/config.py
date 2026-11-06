@@ -40,12 +40,21 @@ def get_llm(temperature: float = 0.0) -> BaseChatModel:
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
         api_key = settings.gemini_api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-        model = settings.model_name or "gemini-1.5-pro"
-        return ChatGoogleGenerativeAI(
+        model = settings.model_name or "gemini-3.5-flash-lite"
+        primary_llm = ChatGoogleGenerativeAI(
             model=model,
             temperature=temperature,
             google_api_key=api_key,
+            max_retries=3,
         )
+        fallback_model_name = "gemini-3.8-flash" if model != "gemini-3.8-flash" else "gemini-3.5-flash-lite"
+        fallback_llm = ChatGoogleGenerativeAI(
+            model=fallback_model_name,
+            temperature=temperature,
+            google_api_key=api_key,
+            max_retries=3,
+        )
+        return primary_llm.with_fallbacks([fallback_llm])
         
     elif provider == "openai":
         from langchain_openai import ChatOpenAI
