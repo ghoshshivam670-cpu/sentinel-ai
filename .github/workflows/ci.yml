@@ -30,3 +30,22 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
           python -m pytest tests/test_evals.py -v
+
+  docker-build-and-smoke-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: |
+          docker compose config -q
+
+      - name: Build Production Docker Image
+        run: |
+          docker build -t sentinel-ai:ci .
+
+      - name: Run Tests Inside Hardened Non-Root Container
+        run: |
+          docker run --rm sentinel-ai:ci python -m pytest tests/test_evals.py -v

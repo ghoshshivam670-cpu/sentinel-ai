@@ -74,9 +74,18 @@ sentinel-ai/
 │   │   └── tracer.py        # Langfuse / OpenTelemetry tracing
 │   ├── config.py            # Pydantic BaseSettings & multi-provider factory
 │   └── cli.py               # Rich terminal CLI interface
+├── scripts/
+│   └── pr_audit.py          # GitHub Actions PR review bot runner
 ├── tests/
 │   ├── sample_vulnerable_code/ # Real benchmark targets (SQLi, auth flaws)
 │   └── test_evals.py        # Automated test & sandbox safety benchmarks
+├── .github/workflows/
+│   ├── ci.yml               # CI unit tests & Docker container build tests
+│   └── sentinel_pr_audit.yml # Automated PR audit & review comment bot
+├── Dockerfile               # Hardened non-root production image
+├── docker-compose.yml       # Full stack (FastAPI :8000 + Streamlit :8501)
+├── app_ui.py                # Interactive Streamlit dashboard
+├── cli.py                   # CLI entrypoint
 ├── requirements.txt
 ├── .env.example
 └── README.md
@@ -197,6 +206,21 @@ SentinelAI includes `.github/workflows/sentinel_pr_audit.yml` and `scripts/pr_au
 1. In your GitHub repository, navigate to **Settings → Secrets and variables → Actions**.
 2. Add a new repository secret named `GEMINI_API_KEY`.
 3. Whenever a Pull Request modifies `.py` files, SentinelAI automatically audits the diff, generates reproduction tests in an isolated sandbox, and posts a formatted review comment with the proposed self-healing patch diff directly on the PR.
+
+---
+
+### Option E: One-Command Docker Deployment
+
+Launch both the **FastAPI Streaming Engine** (`:8000`) and the **Streamlit Interactive UI** (`:8501`) inside hardened non-root containers:
+
+```bash
+# Ensure .env contains your GEMINI_API_KEY (or OPENAI_API_KEY)
+docker compose up --build -d
+```
+
+- **Interactive Dashboard:** `http://localhost:8501`
+- **FastAPI Swagger Docs:** `http://localhost:8000/docs`
+- **Stop Stack:** `docker compose down`
 
 ---
 
