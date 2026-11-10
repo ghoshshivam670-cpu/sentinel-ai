@@ -1,3 +1,4 @@
+import ast
 from langchain_core.messages import SystemMessage, HumanMessage
 from sentinel.config import get_llm
 from sentinel.schemas.models import TestGenerationResult
@@ -14,8 +15,36 @@ Requirements:
    - Example (Weak Hash): Assert that stored password hashes are NOT raw unsalted MD5 (`assert stored_hash != hashlib.md5(pw.encode()).hexdigest()`), and valid login still succeeds!
    - CRITICAL: NEVER invert the assertion to assert that the bug exists (never `assert stored_hash == md5(...)`).
 4. Only use Python standard library and `pytest`/`unittest.mock`. Do NOT require external packages like `bcrypt` or `argon2`.
-5. Return ONLY clean executable Python code inside the structured output test_code field. No markdown fence formatting.
+5. Ensure EVERY used module or name (such as `pytest`, `hashlib`, `hmac`, `sqlite3`, `inspect`, `re`, `json`) is explicitly imported at the top of `test_code`. Zero undefined NameError/ImportError bugs!
+6. Return ONLY clean executable Python code inside the structured output test_code field. No markdown fence formatting.
 """
+
+
+def _ensure_stdlib_imports(test_code: str) -> str:
+    """Adds missing top-level imports for common stdlib modules referenced via attribute access."""
+    common_modules = ("pytest", "hashlib", "hmac", "sqlite3", "inspect", "re", "json", "os", "secrets")
+    try:
+        tree = ast.parse(test_code)
+    except SyntaxError:
+        return test_code
+
+    imported = set()
+    referenced_roots = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            referenced_roots.add(node.value.id)
+
+    missing = [mod for mod in common_modules if mod in referenced_roots and mod not in imported]
+    if not missing:
+        return test_code
+
+    import_header = "\n".join(f"import {mod}" for mod in missing)
+    return f"{import_header}\n{test_code}"
 
 def test_gen_node(state: AgentState) -> dict:
     """
@@ -66,7 +95,7 @@ Generate a reproduction pytest file named 'test_reproduction.py'.
         cleaned_code = cleaned_code[len("```"):].strip()
     if cleaned_code.endswith("```"):
         cleaned_code = cleaned_code[:-3].strip()
-    test_result.test_code = cleaned_code
+    test_result.test_code = _ensure_stdlib_imports(cleaned_code)
 
     log_msg = f"[TestEngineer] Generated reproduction test suite '{test_result.test_file_path}' targeting {len(test_result.targeted_vulnerability_ids)} findings."
     return {

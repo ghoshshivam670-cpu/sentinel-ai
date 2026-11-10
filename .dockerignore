@@ -11,4 +11,6 @@ __pycache__/
 htmlcov/
 *.log
 sandbox_runs/
+logs/
+.deepeval/
 SENTINEL_AUDIT_REPORT.md

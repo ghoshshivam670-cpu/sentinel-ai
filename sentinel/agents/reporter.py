@@ -22,6 +22,8 @@ def reporter_node(state: AgentState) -> dict:
     project_id = state.get("project_id", "unnamed-project")
     audit = state.get("audit_report")
     status = state.get("final_status", "COMPLETED")
+    if status in ("PENDING", "", None) and (not audit or not audit.vulnerabilities):
+        status = "CLEAN"
     iters = state.get("iteration_count", 0)
     verif = state.get("verification_execution")
     patch = state.get("latest_patch")
@@ -108,6 +110,7 @@ def reporter_node(state: AgentState) -> dict:
     log_msg = "[Reporter] Final executive security & patch report generated."
 
     return {
+        "final_status": status,
         "final_summary_report": report_text,
         "activity_log": [log_msg]
     }

@@ -1,7 +1,7 @@
 import sys
 import difflib
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Optional
 import typer
 
 # Ensure project root is importable
@@ -9,12 +9,16 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from sentinel.workflow.graph import build_sentinel_graph
-from sentinel.observability.tracer import get_langfuse_callback_handler
+from sentinel.observability.tracer import get_run_callbacks
 
 app = typer.Typer(help="SentinelAI GitHub PR Autonomous Audit Runner")
 
 
-def build_pr_comment(final_state: dict, target_files: List[str]) -> str:
+def build_pr_comment(
+    final_state: dict,
+    target_files: List[str],
+    telemetry_summary: Optional[Dict[str, Any]] = None,
+) -> str:
     audit = final_state.get("audit_report")
     status = final_state.get("final_status", "COMPLETED")
     iters = final_state.get("iteration_count", 0)
@@ -80,6 +84,16 @@ def build_pr_comment(final_state: dict, target_files: List[str]) -> str:
         )
         lines.append("")
 
+    if telemetry_summary:
+        lines.append("### 📊 LLMOps Observability Telemetry")
+        lines.append(
+            f"- **LLM Calls:** `{telemetry_summary.get('llm_calls', 0)}` | "
+            f"**Total Tokens:** `{telemetry_summary.get('total_tokens', 0)}` | "
+            f"**LLM Latency:** `{telemetry_summary.get('total_latency_seconds', 0.0)}s` | "
+            f"**Est. Cost:** `${telemetry_summary.get('estimated_cost_usd', 0.0):.6f}`"
+        )
+        lines.append("")
+
     lines.append("---")
     lines.append("*Automated review powered by [SentinelAI](https://github.com/ghoshshivam670-cpu/sentinel-ai) (LangGraph + Sandboxed Execution)*")
     return "\n".join(lines)
@@ -126,11 +140,7 @@ def run(
         "activity_log": [],
     }
 
-    callbacks = []
-    langfuse_cb = get_langfuse_callback_handler()
-    if langfuse_cb:
-        callbacks.append(langfuse_cb)
-
+    callbacks, telemetry = get_run_callbacks(project_id="github-pr-audit")
     config = {"callbacks": callbacks} if callbacks else {}
     final_state = initial_state
 
@@ -145,7 +155,11 @@ def run(
             if "activity_log" in state_update and state_update["activity_log"]:
                 typer.echo(f"[{node_name.upper()}] {state_update['activity_log'][-1]}")
 
-    comment_md = build_pr_comment(final_state, list(code_files.keys()))
+    comment_md = build_pr_comment(
+        final_state,
+        list(code_files.keys()),
+        telemetry_summary=telemetry.get_summary(),
+    )
     output.write_text(comment_md, encoding="utf-8")
     typer.echo(f"PR audit comment written to {output}")
 

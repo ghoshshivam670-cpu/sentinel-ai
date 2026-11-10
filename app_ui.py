@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from sentinel.workflow.graph import build_sentinel_graph
 from sentinel.config import settings
+from sentinel.observability.tracer import get_run_callbacks
 
 # Page Configuration
 st.set_page_config(
@@ -65,9 +66,23 @@ st.markdown(
 # Sidebar
 st.sidebar.title("⚙️ Engine Configuration")
 active_model = settings.model_name or "gemini-3.5-flash-lite"
-st.sidebar.info(f"**Active Model:** `{active_model}`\n\n**Provider:** `{settings.default_llm_provider.upper()}`")
+langfuse_configured = bool(
+    (settings.langfuse_public_key or os.getenv("LANGFUSE_PUBLIC_KEY"))
+    and (settings.langfuse_secret_key or os.getenv("LANGFUSE_SECRET_KEY"))
+)
+obs_mode = "Langfuse Cloud + Local Traces" if langfuse_configured else "Local JSONL (`logs/traces.jsonl`)"
+st.sidebar.info(
+    f"**Active Model:** `{active_model}`\n\n"
+    f"**Provider:** `{settings.default_llm_provider.upper()}`\n\n"
+    f"**Observability:** {obs_mode}"
+)
 
 max_iterations = st.sidebar.slider("Max Self-Healing Iterations", min_value=1, max_value=5, value=3)
+run_deepeval = st.sidebar.checkbox(
+    "Run DeepEval LLM-as-a-Judge",
+    value=False,
+    help="Evaluates audit precision, test quality, and patch security via GEval after workflow completion.",
+)
 
 # Sample Code Loader
 sample_path = Path("tests/sample_vulnerable_code/auth_service.py")
@@ -155,9 +170,10 @@ if run_audit:
                 "reporter": 1.0
             }
 
+            callbacks, telemetry = get_run_callbacks(project_id=filename)
             terminal_state = dict(initial_state)
 
-            for event in graph.stream(initial_state):
+            for event in graph.stream(initial_state, config={"callbacks": callbacks}):
                 for node_name, state_update in event.items():
                     for k, v in state_update.items():
                         if k == "activity_log":
@@ -172,6 +188,18 @@ if run_audit:
                         progress_bar.progress(step_weights[node_name])
 
             progress_bar.progress(1.0)
+            terminal_state["telemetry"] = telemetry.get_summary()
+            terminal_state["langfuse_connected"] = len(callbacks) > 1
+
+            if run_deepeval:
+                with st.spinner("Running DeepEval GEval LLM-as-a-Judge quality scoring..."):
+                    from sentinel.evals.judge import evaluate_sentinel_run
+
+                    terminal_state["deepeval_report"] = evaluate_sentinel_run(
+                        code_files=code_files,
+                        final_state=terminal_state,
+                    )
+
             st.success("✅ Multi-Agent Workflow Execution Complete!")
             st.session_state.audit_state = terminal_state
 
@@ -185,8 +213,34 @@ if state:
     verif = state.get("verification_execution")
     report_text = state.get("final_summary_report")
 
-    # Tab 1: Live Execution Log
+    # Tab 1: Live Execution Log + LLMOps Telemetry
     with tab_exec:
+        tel = state.get("telemetry")
+        if tel:
+            st.subheader("📊 LLMOps Observability Telemetry")
+            t1, t2, t3, t4 = st.columns(4)
+            t1.metric("LLM Calls", tel.get("llm_calls", 0))
+            t2.metric("Total Tokens", tel.get("total_tokens", 0))
+            t3.metric("LLM Latency", f"{tel.get('total_latency_seconds', 0.0)}s")
+            t4.metric("Est. Cost (USD)", f"${tel.get('estimated_cost_usd', 0.0):.6f}")
+            st.caption(
+                f"Trace Log: `{tel.get('trace_log_path', 'logs/traces.jsonl')}` | "
+                f"Langfuse Synced: `{'Yes' if state.get('langfuse_connected') else 'Local Mode'}`"
+            )
+            st.divider()
+
+        eval_rep = state.get("deepeval_report")
+        if eval_rep:
+            st.subheader(f"🧪 DeepEval GEval Judge Scorecard (Overall: {eval_rep['overall_score']:.3f})")
+            eval_cols = st.columns(len(eval_rep["metrics"]) or 1)
+            for idx, (_, m_data) in enumerate(eval_rep["metrics"].items()):
+                badge = "PASS" if m_data["passed"] else "FAIL"
+                eval_cols[idx].metric(m_data["name"], f"{m_data['score']:.3f}", badge)
+            with st.expander("View DeepEval Judge Rationales"):
+                for _, m_data in eval_rep["metrics"].items():
+                    st.markdown(f"- **{m_data['name']} (`{m_data['score']:.3f}`):** {m_data['reason']}")
+            st.divider()
+
         st.subheader("Step-by-Step Provenance Log")
         for log_entry in state.get("activity_log", []):
             st.info(log_entry)

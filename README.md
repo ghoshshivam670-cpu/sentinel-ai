@@ -2,9 +2,10 @@
 
 [![CI & Benchmarks](https://github.com/ghoshshivam670-cpu/sentinel-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/ghoshshivam670-cpu/sentinel-ai/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph%200.2+-orange.svg)](https://github.com/langchain-ai/langgraph)
+[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph%201.0+-orange.svg)](https://github.com/langchain-ai/langgraph)
+[![DeepEval](https://img.shields.io/badge/Evals-DeepEval%20GEval-brightgreen.svg)](https://github.com/confident-ai/deepeval)
+[![LLMOps: Langfuse](https://img.shields.io/badge/LLMOps-Langfuse%20%2B%20JSONL-purple.svg)](https://langfuse.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![LLMOps: Langfuse](https://img.shields.io/badge/LLMOps-Langfuse-purple.svg)](https://langfuse.com)
 
 > **SentinelAI** is an enterprise-grade autonomous multi-agent system that audits source code for logic bugs and security vulnerabilities (OWASP/CWE), authors isolated reproduction test suites, executes them in a sandboxed runtime, and drives an iterative self-healing reflection loop until verified patches pass all assertions.
 
@@ -42,8 +43,9 @@ flowchart TD
 
 - **Cyclical Self-Correction Loops:** Rather than naive one-shot prompting, SentinelAI executes a strict Red-Green-Refactor agentic loop: test failure $\rightarrow$ critic diagnosis $\rightarrow$ patch adjustment $\rightarrow$ verification.
 - **Isolated Sandbox Execution:** Generated reproduction tests are run in isolated subprocess workspaces with CPU/wall-clock timeouts to prevent denial-of-service or malicious code execution.
-- **Multi-Model Provider Support:** Built-in model factory supporting Google Gemini (`gemini-1.5-pro`), OpenAI (`gpt-4o`), and Anthropic Claude (`claude-3-5-sonnet`).
-- **Production Observability:** Native integration with [Langfuse](https://langfuse.com) for end-to-end token consumption, latency traces, and prompt auditing.
+- **Multi-Model Provider Support:** Built-in model factory (`get_llm`) with automatic fallback & retry policies supporting Google Gemini (`gemini-3.5-flash-lite` / `gemini-3.8-flash`), OpenAI (`gpt-4o`), and Anthropic Claude (`claude-3-5-sonnet`).
+- **DeepEval LLM-as-a-Judge Benchmarks:** Built-in `GEval` scoring (`Auditor Precision & Recall`, `Reproduction Test Quality`, `Remediation Security`) powered by a custom `GeminiJudgeModel` adapter requiring zero OpenAI keys, plus clean-code false-positive guards.
+- **Dual-Mode Production Observability:** Native [Langfuse](https://langfuse.com) v5 callback streaming paired with an always-on `LocalTelemetryCallbackHandler` capturing token counts, model latency, estimated USD cost, and structured JSONL traces (`logs/traces.jsonl`).
 - **Real-Time Streaming API:** FastAPI async backend serving Server-Sent Events (SSE) for granular step-by-step agent telemetry in frontend applications.
 - **Strict Pydantic V2 Schemas:** 100% deterministic, typed schemas for vulnerabilities, patch diffs, and verdicts.
 
@@ -71,11 +73,15 @@ sentinel-ai/
 │   ├── server/
 │   │   └── app.py           # FastAPI backend with Server-Sent Events (SSE)
 │   ├── observability/
-│   │   └── tracer.py        # Langfuse / OpenTelemetry tracing
+│   │   └── tracer.py        # Langfuse v5 + local JSONL LLMOps telemetry
+│   ├── evals/
+│   │   ├── judge.py         # DeepEval GEval + GeminiJudgeModel wrapper
+│   │   └── benchmark.py     # Vulnerable & clean-code benchmark suite
 │   ├── config.py            # Pydantic BaseSettings & multi-provider factory
 │   └── cli.py               # Rich terminal CLI interface
 ├── scripts/
-│   └── pr_audit.py          # GitHub Actions PR review bot runner
+│   ├── pr_audit.py          # GitHub Actions PR review bot runner
+│   └── run_evals.py         # Automated DeepEval LLM-as-a-Judge runner
 ├── tests/
 │   ├── sample_vulnerable_code/ # Real benchmark targets (SQLi, auth flaws)
 │   └── test_evals.py        # Automated test & sandbox safety benchmarks
@@ -116,7 +122,7 @@ Copy `.env.example` to `.env` and provide your preferred API key:
 
 ```ini
 DEFAULT_LLM_PROVIDER=gemini # or "openai", "anthropic"
-MODEL_NAME=gemini-1.5-pro
+MODEL_NAME=gemini-3.5-flash-lite
 
 # Add your API key:
 GEMINI_API_KEY=your_gemini_api_key_here
@@ -154,7 +160,7 @@ VERIFICATION_SANDBOX: [Sandbox] Verification run finished. Status: PASS in 0.18s
 CRITIC: [Critic] Patch ACCEPTED! All tests verified successfully in iteration 1.
 REPORTER: [Reporter] Final executive security & patch report generated.
 
-✓ Report generated successfully: SENTINEL_AUDIT_REPORT.md
+[OK] Report generated successfully: SENTINEL_AUDIT_REPORT.md
 ```
 
 ---
@@ -191,10 +197,11 @@ Launch the visual dashboard to test agents with a rich UI:
 streamlit run app_ui.py
 ```
 
-- **Live Multi-Agent Workflow:** Watch the state machine transition in real time with progress tracking.
+- **Live Multi-Agent Workflow:** Watch the state machine transition in real time with progress tracking and live LLMOps token/cost telemetry.
 - **Vulnerability Inspection:** Visual cards with CWE IDs, severity badges, and mitigation steps.
 - **Reproduction Test Suite:** Inspect the exact pytest file generated by the Test Engineer.
 - **Side-by-Side Diff:** Compare the original vulnerable code directly against the autonomously healed code.
+- **Inline DeepEval Quality Scoring:** Optional `GEval` LLM-as-a-Judge audit right inside the dashboard.
 - **One-Click Download:** Export the comprehensive audit report as Markdown.
 
 ---
@@ -226,10 +233,20 @@ docker compose up --build -d
 
 ## 🧪 Automated Benchmarks & Evals
 
-Run the sandbox execution & workflow benchmarks:
+### 1. Deterministic Sandbox & Judge Unit Suite
+Run the sandbox, telemetry, and mocked DeepEval `GEval` suite:
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/test_evals.py -v
+```
+
+### 2. End-to-End DeepEval LLM-as-a-Judge Scorecard
+Run live multi-agent + `GEval` scoring across vulnerable targets (`auth_service.py`, `payment_processor.py`) and clean false-positive guards (`clean_discount.py`) to generate `EVAL_SCORECARD.md`:
+
+```bash
+python cli.py evals --threshold 0.7
+# or audit any single file with inline DeepEval scoring:
+python cli.py audit tests/sample_vulnerable_code/auth_service.py --eval
 ```
 
 ---

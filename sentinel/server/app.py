@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from sentinel.workflow.graph import build_sentinel_graph
-from sentinel.observability.tracer import get_langfuse_callback_handler
+from sentinel.observability.tracer import get_run_callbacks
 
 app = FastAPI(
     title="SentinelAI Engine API",
@@ -62,16 +62,16 @@ async def stream_audit(payload: AuditRequest):
             "activity_log": []
         }
 
-        callbacks = []
-        langfuse_cb = get_langfuse_callback_handler()
-        if langfuse_cb:
-            callbacks.append(langfuse_cb)
-
+        callbacks, telemetry = get_run_callbacks(project_id=payload.project_id)
         config = {"callbacks": callbacks} if callbacks else {}
 
         yield {
             "event": "lifecycle",
-            "data": json.dumps({"status": "STARTED", "message": f"Ingested {len(payload.code_files)} code files."})
+            "data": json.dumps({
+                "status": "STARTED",
+                "message": f"Ingested {len(payload.code_files)} code files.",
+                "langfuse_enabled": len(callbacks) > 1,
+            })
         }
 
         try:
@@ -91,6 +91,13 @@ async def stream_audit(payload: AuditRequest):
                             "final_status": state_update.get("final_status", "IN_PROGRESS")
                         })
                     }
+
+            telemetry_summary = telemetry.get_summary()
+            telemetry_summary["langfuse_enabled"] = len(callbacks) > 1
+            yield {
+                "event": "telemetry",
+                "data": json.dumps(telemetry_summary)
+            }
 
             yield {
                 "event": "complete",
