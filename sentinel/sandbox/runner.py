@@ -32,15 +32,26 @@ class SandboxRunner:
         start_time = time.time()
         
         try:
-            # 1. Write codebase files
+            # 1. Write codebase files (with path traversal guard)
+            python_paths = [temp_dir]
+            abs_temp = os.path.abspath(temp_dir)
             for file_path, content in code_files.items():
-                target_path = os.path.join(temp_dir, file_path)
+                clean_rel = file_path.lstrip("/\\")
+                target_path = os.path.abspath(os.path.join(abs_temp, clean_rel))
+                if not target_path.startswith(abs_temp + os.sep) and target_path != abs_temp:
+                    raise ValueError(f"Unsafe file path outside sandbox: {file_path}")
                 os.makedirs(os.path.dirname(target_path), exist_ok=True)
                 with open(target_path, "w", encoding="utf-8") as f:
                     f.write(content)
+                parent_dir = os.path.dirname(target_path)
+                if parent_dir not in python_paths:
+                    python_paths.append(parent_dir)
 
             # 2. Write reproduction test file
-            test_target_path = os.path.join(temp_dir, test_file_name)
+            clean_test_rel = test_file_name.lstrip("/\\")
+            test_target_path = os.path.abspath(os.path.join(abs_temp, clean_test_rel))
+            if not test_target_path.startswith(abs_temp + os.sep):
+                raise ValueError(f"Unsafe test path outside sandbox: {test_file_name}")
             os.makedirs(os.path.dirname(test_target_path), exist_ok=True)
             with open(test_target_path, "w", encoding="utf-8") as f:
                 f.write(test_file_content)
@@ -49,15 +60,29 @@ class SandboxRunner:
             python_exe = sys.executable
 
             # 4. Run pytest inside the isolated workspace
-            cmd = [python_exe, "-m", "pytest", test_file_name, "-v", "--tb=short"]
+            cmd = [
+                python_exe,
+                "-m",
+                "pytest",
+                test_file_name,
+                f"--rootdir={temp_dir}",
+                "--noconftest",
+                "-p",
+                "no:cacheprovider",
+                "-v",
+                "--tb=short",
+            ]
             
-            # Inject PYTHONPATH so imports resolve correctly in temp_dir
+            # Inject PYTHONPATH so imports resolve correctly in temp_dir and nested packages
+            # Disable heavy global pytest plugin autoloading (e.g., deepeval) inside isolated sandbox
             env = os.environ.copy()
-            env["PYTHONPATH"] = temp_dir
+            env["PYTHONPATH"] = os.pathsep.join(python_paths)
+            env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
 
             process = subprocess.run(
                 cmd,
                 cwd=temp_dir,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 timeout=self.timeout_seconds,

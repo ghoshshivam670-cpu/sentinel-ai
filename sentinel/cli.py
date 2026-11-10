@@ -84,21 +84,17 @@ def audit(
 
     # Stream agent state execution
     console.print("\n[yellow]Executing multi-agent state graph...[/yellow]")
-    final_state = None
+    terminal_state = dict(initial_state)
     for event in graph.stream(initial_state, config=config):
         for node_name, state_update in event.items():
+            for k, v in state_update.items():
+                if k == "activity_log":
+                    terminal_state["activity_log"].extend(v)
+                else:
+                    terminal_state[k] = v
             if "activity_log" in state_update and state_update["activity_log"]:
                 latest_msg = state_update["activity_log"][-1]
                 console.print(f"[bold cyan]▶ {node_name.upper()}:[/bold cyan] {latest_msg}")
-        final_state = event
-
-    # Extract final consolidated state
-    if not final_state:
-        console.print("[bold red]Execution ended with no state output.[/bold red]")
-        return
-
-    # Grab the terminal node output
-    terminal_state = list(final_state.values())[0]
 
     # Display Executive Summary Table
     audit_report = terminal_state.get("audit_report")

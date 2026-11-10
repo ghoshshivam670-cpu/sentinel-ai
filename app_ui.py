@@ -75,11 +75,23 @@ sample_code = ""
 if sample_path.exists():
     sample_code = sample_path.read_text(encoding="utf-8")
 
-input_mode = st.sidebar.radio("Input Source", ["Preloaded Vulnerable Sample (SQLi)", "Custom Code Input"])
+input_mode = st.sidebar.radio(
+    "Input Source",
+    ["Preloaded Vulnerable Sample (SQLi)", "Upload Python File(s)", "Custom Code Input"]
+)
 
+code_files = {}
 if input_mode == "Preloaded Vulnerable Sample (SQLi)":
-    code_content = sample_code
     filename = "auth_service.py"
+    code_files[filename] = sample_code
+elif input_mode == "Upload Python File(s)":
+    uploaded_files = st.sidebar.file_uploader("Upload .py file(s)", type=["py"], accept_multiple_files=True)
+    if uploaded_files:
+        for uf in uploaded_files:
+            code_files[uf.name] = uf.read().decode("utf-8")
+        filename = uploaded_files[0].name
+    else:
+        filename = "uploaded.py"
 else:
     filename = st.sidebar.text_input("Filename", value="app.py")
     code_content = st.sidebar.text_area(
@@ -87,6 +99,7 @@ else:
         height=300,
         value="def query_user(username):\n    # Vulnerable to SQL injection\n    return db.execute(f'SELECT * FROM users WHERE name = {username}')"
     )
+    code_files[filename] = code_content
 
 # Execution Button
 run_audit = st.sidebar.button("🚀 Run Autonomous Audit & Healing", type="primary", use_container_width=True)
@@ -104,58 +117,63 @@ if "audit_state" not in st.session_state:
     st.session_state.audit_state = None
 
 if run_audit:
-    with tab_exec:
-        st.subheader("Agent Workflow In Progress...")
-        status_container = st.container()
-        progress_bar = st.progress(0.0)
-        
-        graph = build_sentinel_graph()
-        initial_state = {
-            "project_id": filename,
-            "original_code_files": {filename: code_content},
-            "current_code_files": {filename: code_content},
-            "plan": None,
-            "audit_report": None,
-            "test_suite": None,
-            "initial_execution": None,
-            "latest_patch": None,
-            "verification_execution": None,
-            "iteration_count": 0,
-            "max_iterations": max_iterations,
-            "critic_verdict": None,
-            "final_status": "PENDING",
-            "final_summary_report": None,
-            "activity_log": []
-        }
+    if not code_files:
+        st.sidebar.error("Please upload at least one .py file first.")
+    else:
+        with tab_exec:
+            st.subheader("Agent Workflow In Progress...")
+            status_container = st.container()
+            progress_bar = st.progress(0.0)
+            
+            graph = build_sentinel_graph()
+            initial_state = {
+                "project_id": filename,
+                "original_code_files": code_files,
+                "current_code_files": dict(code_files),
+                "plan": None,
+                "audit_report": None,
+                "test_suite": None,
+                "initial_execution": None,
+                "latest_patch": None,
+                "verification_execution": None,
+                "iteration_count": 0,
+                "max_iterations": max_iterations,
+                "critic_verdict": None,
+                "final_status": "PENDING",
+                "final_summary_report": None,
+                "activity_log": []
+            }
 
-        step_weights = {
-            "planner": 0.15,
-            "auditor": 0.35,
-            "test_generator": 0.50,
-            "initial_sandbox": 0.65,
-            "coder": 0.80,
-            "verification_sandbox": 0.90,
-            "critic": 0.95,
-            "reporter": 1.0
-        }
+            step_weights = {
+                "planner": 0.15,
+                "auditor": 0.35,
+                "test_generator": 0.50,
+                "initial_sandbox": 0.65,
+                "coder": 0.80,
+                "verification_sandbox": 0.90,
+                "critic": 0.95,
+                "reporter": 1.0
+            }
 
-        events_log = []
-        terminal_state = initial_state
+            terminal_state = dict(initial_state)
 
-        for event in graph.stream(initial_state):
-            for node_name, state_update in event.items():
-                if "activity_log" in state_update and state_update["activity_log"]:
-                    latest_msg = state_update["activity_log"][-1]
-                    events_log.append(f"**[{node_name.upper()}]** {latest_msg}")
-                    with status_container:
-                        st.write(f"▶ **{node_name.upper()}**: {latest_msg}")
-                if node_name in step_weights:
-                    progress_bar.progress(step_weights[node_name])
-                terminal_state = state_update
+            for event in graph.stream(initial_state):
+                for node_name, state_update in event.items():
+                    for k, v in state_update.items():
+                        if k == "activity_log":
+                            terminal_state["activity_log"].extend(v)
+                        else:
+                            terminal_state[k] = v
+                    if "activity_log" in state_update and state_update["activity_log"]:
+                        latest_msg = state_update["activity_log"][-1]
+                        with status_container:
+                            st.write(f"▶ **{node_name.upper()}**: {latest_msg}")
+                    if node_name in step_weights:
+                        progress_bar.progress(step_weights[node_name])
 
-        progress_bar.progress(1.0)
-        st.success("✅ Multi-Agent Workflow Execution Complete!")
-        st.session_state.audit_state = terminal_state
+            progress_bar.progress(1.0)
+            st.success("✅ Multi-Agent Workflow Execution Complete!")
+            st.session_state.audit_state = terminal_state
 
 # Display State if Available
 state = st.session_state.audit_state

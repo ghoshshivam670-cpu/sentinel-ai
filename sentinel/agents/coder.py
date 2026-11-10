@@ -9,8 +9,9 @@ Your objective is to produce surgical, production-ready code fixes that eliminat
 Guidelines:
 1. Fix the root cause without introducing breaking changes or regressions.
 2. Maintain existing coding style, variable names, and function signatures unless security requires change.
-3. You must return the COMPLETE updated file content for every modified file under `patched_files` dictionary (mapping filepath to full source string).
-4. If this is a retry iteration, carefully read the Critic's feedback and the exact failure traceback to adjust your patch.
+3. Prefer Python standard library security primitives (`hashlib.pbkdf2_hmac`, `hashlib.scrypt`, `secrets`, `hmac.compare_digest`, parameterized `sqlite3` queries) rather than external libraries like `bcrypt` or `argon2` that may not be installed in the sandbox.
+4. You must return the COMPLETE updated file content for every modified file under `patched_files` dictionary (mapping filepath to full source string).
+5. If this is a retry iteration, carefully read the Critic's feedback and the exact failure traceback to adjust your patch.
 """
 
 def coder_node(state: AgentState) -> dict:

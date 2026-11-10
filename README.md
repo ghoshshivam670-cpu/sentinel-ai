@@ -189,12 +189,22 @@ streamlit run app_ui.py
 
 ---
 
+### Option D: GitHub Actions Autonomous PR Review Bot
+
+SentinelAI includes `.github/workflows/sentinel_pr_audit.yml` and `scripts/pr_audit.py` to automatically audit every Pull Request:
+
+1. In your GitHub repository, navigate to **Settings → Secrets and variables → Actions**.
+2. Add a new repository secret named `GEMINI_API_KEY`.
+3. Whenever a Pull Request modifies `.py` files, SentinelAI automatically audits the diff, generates reproduction tests in an isolated sandbox, and posts a formatted review comment with the proposed self-healing patch diff directly on the PR.
+
+---
+
 ## 🧪 Automated Benchmarks & Evals
 
-Run the sandbox execution benchmarks:
+Run the sandbox execution & workflow benchmarks:
 
 ```bash
-pytest tests/test_evals.py -v
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/test_evals.py -v
 ```
 
 ---
