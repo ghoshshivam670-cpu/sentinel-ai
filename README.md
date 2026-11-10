@@ -1,5 +1,6 @@
 # SentinelAI: Autonomous Multi-Agent Code Audit & Self-Healing Engine
 
+[![CI & Benchmarks](https://github.com/ghoshshivam670-cpu/sentinel-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/ghoshshivam670-cpu/sentinel-ai/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph%200.2+-orange.svg)](https://github.com/langchain-ai/langgraph)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

@@ -29,4 +29,4 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
-          pytest tests/test_evals.py -v
+          python -m pytest tests/test_evals.py -v
